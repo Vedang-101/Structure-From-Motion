@@ -1,2 +1,2 @@
-# Major-Project-2020
-Structure from Motion
+# Structure from Motion (Major Project 2020-21)
+Empty Readme
