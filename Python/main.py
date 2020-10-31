@@ -15,9 +15,12 @@ def PointMatchingSURF(img1, img2):
     surf = cv2.xfeatures2d.SURF_create()
     keypoints1, descriptors1 = surf.detectAndCompute(img1, None)
     keypoints2, descriptors2 = surf.detectAndCompute(img2, None)
-
+    img4 = cv2.drawKeypoints(img1, keypoints1, None)
+    cv2.imwrite("KP.jpg", img4)
     bf = cv2.BFMatcher_create()
     matches = bf.match(descriptors1, descriptors2)
+    img3 = cv2.drawMatches(img1, keypoints1, img2, keypoints2, matches[:200], None, flags=2)
+    cv2.imwrite("Out2.jpg", img3)
     return keypoints1, keypoints2,matches
 
 def PointMatchingOpticalFlow(img1, img2):
@@ -61,8 +64,12 @@ def findCalibrationMat(img):
     px = img.shape[1] / 2
     py = img.shape[0] / 2
 
-    K = np.float32([[1000, 0, px],
-                    [0, 1000, py],
+    # For Fountain dataset
+    # 2759.48 0 1520.69 
+    # 0 2764.16 1006.81 
+    # 0 0 1
+    K = np.float32([[2759.48, 0, 1520.69],
+                    [0, 12764.16, 1006.81],
                     [0, 0, 1]])
     return K
 
@@ -138,16 +145,17 @@ def TraingulatePoints(pt_set1, pt_set2, matches, K, P, P1, img1, ply):
         # xPt_img_ = np.float32([[xPt_img[0]/xPt_img[2], xPt_img[1]/xPt_img[2]]])
         # reproj_error.append(np.linalg.norm(xPt_img_-kp1))
         
-        #rgb = img1[int(kp[0]),int(kp[1])]
+        #print(kp[0], kp[1])
+        bgr = img1[int(kp[1]),int(kp[0])]
 
         #x = X[0] y = Y[1] z = X[2]
-        ply.append([X[0],X[1],X[2],255,255,255])
+        ply.append([X[0],X[1],X[2],bgr[0],bgr[1],bgr[2]])
     #me = np.mean(reproj_error)
     return ply
 
 def main():
     img1 = cv2.imread("../Resources/Images/0000.jpg")
-    img2 = cv2.imread("../Resources/Images/0001.jpg")
+    img2 = cv2.imread("../Resources/Images/0000.jpg")
 
     kp1, kp2, matches = PointMatchingSURF(img1, img2)
     K = findCalibrationMat(img1)
@@ -158,13 +166,14 @@ def main():
                      [0,0,1,0]])
 
     P1 = FindPMat(E)
+    print(P1)
 
     ply = []
     ply = TraingulatePoints(kp1, kp2, matches, K, P0, P1, img1, ply)
     #print("Mean Error = ", error)
 
     out = PLY("Output/")
-    out.insert_header(len(ply), "Result")
+    out.insert_header(len(ply), "Result7")
     for i in range(0,len(ply)):
         out.insert_point(ply[i][0],ply[i][1],ply[i][2],ply[i][3],ply[i][4],ply[i][5])
 

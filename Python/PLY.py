@@ -29,6 +29,6 @@ class PLY:
 			file.write((str(x[0]) + ' ').encode('utf-8'))
 			file.write((str(y[0]) + ' ').encode('utf-8'))
 			file.write((str(z[0]) + ' ').encode('utf-8'))
-			file.write((str(b) + ' ').encode('utf-8'))
+			file.write((str(r) + ' ').encode('utf-8'))
 			file.write((str(g) + ' ').encode('utf-8'))
-			file.write((str(r) + '\n').encode('utf-8'))
+			file.write((str(b) + '\n').encode('utf-8'))
