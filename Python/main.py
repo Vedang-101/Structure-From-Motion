@@ -51,14 +51,39 @@ def PointMatchingOpticalFlow(img1, img2):
         else:
             vstatus[i] = 0
 
-    right_points_to_find_flat = np.array(right_points_to_find).reshape(1, len(right_points_to_find), 2)
-
+    right_points_to_find_flat = np.array(right_points_to_find).reshape(1, len(right_points_to_find)*2)
     right_features = KeyPointsToPoints(right_keypoints)
-    right_features_flat = right_features.reshape(1, len(right_features), 2)
+    right_features_flat = right_features.reshape(1, len(right_features)*2)
 
     #Look around each of point in right image for any features that were detected in its area and make a match
     #matcher = cv2.BFMatcher_create()
     nearest_neighbours = cv2.BFMatcher().radiusMatch(right_features_flat, right_points_to_find_flat, 2.0)
+    matches = []
+
+    found_in_imgpts_j = []
+
+    for i in range(0, len(nearest_neighbours)):
+        if len(nearest_neighbours[i]) == 1:
+            _m = nearest_neighbours[i][0]
+        elif len(nearest_neighbours[i]) > 1:
+            if (nearest_neighbours[i][0].distance / nearest_neighbours[i][1].distance) < 0.7:
+                _m = nearest_neighbours[i][0]
+            else:
+                #did not pass ratio test
+                pass
+        else:
+            #no match
+            pass
+
+        #prevent duplicates
+        if found_in_imgpts_j.count(_m.trainIdx) == 0:
+            #back to original indexing of points for <i_idx>
+            _m.queryIdx = right_points_to_find_back_index[_m.queryIdx]
+            matches.append(_m)	
+
+    img3 = cv2.drawMatches(img1, left_keypoints, img2, right_keypoints, matches, None)
+    cv2.imwrite("Out123.jpg", img3)
+    return left_keypoints, right_keypoints, matches
 
 def findCalibrationMat(img):
     px = img.shape[1] / 2
@@ -155,9 +180,10 @@ def TraingulatePoints(pt_set1, pt_set2, matches, K, P, P1, img1, ply):
 
 def main():
     img1 = cv2.imread("../Resources/Images/0000.jpg")
-    img2 = cv2.imread("../Resources/Images/0000.jpg")
-
-    kp1, kp2, matches = PointMatchingSURF(img1, img2)
+    img2 = cv2.imread("../Resources/Images/0001.jpg")
+    #kp1, kp2, matches = PointMatchingSURF(img1, img2)
+    kp1, kp2, matches = PointMatchingOpticalFlow(img1, img2)
+    print(matches)
     K = findCalibrationMat(img1)
     E = FindEssentialMat(kp1, kp2, matches, K)
 
@@ -177,7 +203,7 @@ def main():
     for i in range(0,len(ply)):
         out.insert_point(ply[i][0],ply[i][1],ply[i][2],ply[i][3],ply[i][4],ply[i][5])
 
-    #cv2.waitKey()
+    
     cv2.destroyAllWindows()
 
 main()
