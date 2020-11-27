@@ -28,7 +28,6 @@ def PointMatchingOpticalFlow(img1, img2):
     ffd = cv2.FastFeatureDetector_create()
     left_keypoints = ffd.detect(img1, None)
     right_keypoints = ffd.detect(img2, None)
-
     left_points = KeyPointsToPoints(left_keypoints)
     right_points = np.zeros_like(left_points)
 
@@ -40,7 +39,6 @@ def PointMatchingOpticalFlow(img1, img2):
         gray = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
 
     right_points, vstatus, verror = cv2.calcOpticalFlowPyrLK(prevgray,gray,left_points,right_points)
-
     #Filterout points with high error
     right_points_to_find = []
     right_points_to_find_back_index = []
@@ -52,18 +50,19 @@ def PointMatchingOpticalFlow(img1, img2):
             vstatus[i] = 0
 
     found_in_imgpts_j = []
-    right_points_to_find_flat = np.array(right_points_to_find).reshape(1, len(right_points_to_find)*2)
+    right_points_to_find_flat = np.array(right_points_to_find).reshape(len(right_points_to_find), 2)
     right_features = KeyPointsToPoints(right_keypoints)
-    right_features_flat = right_features.reshape(1, len(right_features)*2)
+    right_features_flat = right_features.reshape(len(right_features), 2)
 
     #Look around each of point in right image for any features that were detected in its area and make a match
-    
-    #matcher = cv2.BFMatcher_create()
-    nearest_neighbours = cv2.BFMatcher().radiusMatch(right_points_to_find_flat, right_features_flat, 2.0)#THIS IS THE NEW LINE added(Sarthak)
+    matcher = cv2.BFMatcher_create(cv2.NORM_L2)
+    nearest_neighbours = matcher.radiusMatch(right_points_to_find_flat, right_features_flat, 2.0)#THIS IS THE NEW LINE added(Sarthak)
     #nearest_neighbours = cv2.BFMatcher().radiusMatch(right_features_flat, right_points_to_find_flat, 2.0)
     matches = []
+    # print(len(nearest_neighbours))
 
-    for i in range(0, len(nearest_neighbours)):
+    for i in range(0, len(nearest_neighbours)):      
+        _m = None
         if len(nearest_neighbours[i]) == 1:
             _m = nearest_neighbours[i][0]
         elif len(nearest_neighbours[i]) > 1:
@@ -77,11 +76,12 @@ def PointMatchingOpticalFlow(img1, img2):
             pass
 
         #prevent duplicates
-        if found_in_imgpts_j.count(_m.trainIdx) == 0:
-            #back to original indexing of points for <i_idx>
-            _m.queryIdx = right_points_to_find_back_index[_m.queryIdx]
-            matches.append(_m)	
-            right_points_to_find_back_index.append(_m.trainIdx) #Added this LINE(Sarthak)
+        if _m != None:
+            if found_in_imgpts_j.count(_m.trainIdx) == 0:
+                #back to original indexing of points for <i_idx>
+                _m.queryIdx = right_points_to_find_back_index[_m.queryIdx]
+                matches.append(_m)	
+                right_points_to_find_back_index.append(_m.trainIdx) #Added this LINE(Sarthak)
 
     img3 = cv2.drawMatches(img1, left_keypoints, img2, right_keypoints, matches, None)
     cv2.imwrite("Out123.jpg", img3)
@@ -95,8 +95,11 @@ def findCalibrationMat(img):
     # 2759.48 0 1520.69 
     # 0 2764.16 1006.81 
     # 0 0 1
-    K = np.float32([[2759.48, 0, 1520.69],
-                    [0, 12764.16, 1006.81],
+    # K = np.float32([[2759.48, 0, 1520.69],
+    #                 [0, 12764.16, 1006.81],
+    #                 [0, 0, 1]])
+    K = np.float32([[1000, 0, px],
+                    [0, 1000, py],
                     [0, 0, 1]])
     return K
 
@@ -181,11 +184,10 @@ def TraingulatePoints(pt_set1, pt_set2, matches, K, P, P1, img1, ply):
     return ply
 
 def main():
-    img1 = cv2.imread("../Resources/Images/0000.jpg")
-    img2 = cv2.imread("../Resources/Images/0001.jpg")
-    #kp1, kp2, matches = PointMatchingSURF(img1, img2)
-    kp1, kp2, matches = PointMatchingOpticalFlow(img1, img2)
-    print(matches)
+    img1 = cv2.imread("../Resources/Cube/A.png")
+    img2 = cv2.imread("../Resources/Cube/B.png")
+    kp1, kp2, matches = PointMatchingSURF(img1, img2)
+    #kp1, kp2, matches = PointMatchingOpticalFlow(img1, img2)
     K = findCalibrationMat(img1)
     E = FindEssentialMat(kp1, kp2, matches, K)
 
