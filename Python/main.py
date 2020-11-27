@@ -51,16 +51,17 @@ def PointMatchingOpticalFlow(img1, img2):
         else:
             vstatus[i] = 0
 
+    found_in_imgpts_j = []
     right_points_to_find_flat = np.array(right_points_to_find).reshape(1, len(right_points_to_find)*2)
     right_features = KeyPointsToPoints(right_keypoints)
     right_features_flat = right_features.reshape(1, len(right_features)*2)
 
     #Look around each of point in right image for any features that were detected in its area and make a match
+    
     #matcher = cv2.BFMatcher_create()
-    nearest_neighbours = cv2.BFMatcher().radiusMatch(right_features_flat, right_points_to_find_flat, 2.0)
+    nearest_neighbours = cv2.BFMatcher().radiusMatch(right_points_to_find_flat, right_features_flat, 2.0)#THIS IS THE NEW LINE added(Sarthak)
+    #nearest_neighbours = cv2.BFMatcher().radiusMatch(right_features_flat, right_points_to_find_flat, 2.0)
     matches = []
-
-    found_in_imgpts_j = []
 
     for i in range(0, len(nearest_neighbours)):
         if len(nearest_neighbours[i]) == 1:
@@ -80,6 +81,7 @@ def PointMatchingOpticalFlow(img1, img2):
             #back to original indexing of points for <i_idx>
             _m.queryIdx = right_points_to_find_back_index[_m.queryIdx]
             matches.append(_m)	
+            right_points_to_find_back_index.append(_m.trainIdx) #Added this LINE(Sarthak)
 
     img3 = cv2.drawMatches(img1, left_keypoints, img2, right_keypoints, matches, None)
     cv2.imwrite("Out123.jpg", img3)
