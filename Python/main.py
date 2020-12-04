@@ -6,8 +6,8 @@ import glob
 from PLY import PLY
 from PointCloudTable import PointCloudTable
 
-input_dir = "../Resources/Rubics_vertex/"
-output_dir = "F:/Projects/Github/Major-Project-2020/Output/Rubics_vertex"
+input_dir = "../Resources/Fountain/"
+output_dir = "F:/Projects/Github/Major-Project-2020/Output/abc"
 format_img = ".jpg"
 
 def KeyPointsToPoints(keypoints):
@@ -17,7 +17,7 @@ def KeyPointsToPoints(keypoints):
     res = np.array(out, dtype=np.float32)
     return res
 
-def PointMatchingSURF(img1, img2, save = False):
+def PointMatchingSURF(img1, img2, save = False, filename1 = None, filename2 = None):
     #Matches using SURF
     surf = cv2.xfeatures2d.SURF_create()
     keypoints1, descriptors1 = surf.detectAndCompute(img1, None)
@@ -28,10 +28,10 @@ def PointMatchingSURF(img1, img2, save = False):
     matches = bf.match(descriptors1, descriptors2)
     img3 = cv2.drawMatches(img1, keypoints1, img2, keypoints2, matches[:200], None, flags=2)
     if save:
-        cv2.imwrite("Out2.jpg", img3)
+        cv2.imwrite(img1.filename+"_x_"+img2.filename+".jpg", img3)
     return keypoints1, keypoints2,matches
 
-def PointMatchingOpticalFlow(img1, img2, save=False):
+def PointMatchingOpticalFlow(img1, img2, save=False, filename1 = None, filename2 = None):
     #matches using optical flow
     ffd = cv2.FastFeatureDetector_create()
     left_keypoints = ffd.detect(img1, None)
@@ -93,27 +93,31 @@ def PointMatchingOpticalFlow(img1, img2, save=False):
 
     img3 = cv2.drawMatches(img1, left_keypoints, img2, right_keypoints, matches, None)
     if save:
-        cv2.imwrite("OutVert.jpg", img3)
+        cv2.imwrite(filename1+"_x_"+filename2+".jpg", img3)
     return left_keypoints, right_keypoints, matches
 
-def findCalibrationMat(img):
-    px = img.shape[1] / 2
-    py = img.shape[0] / 2
+def findCalibrationMat():
+    with open(input_dir+'intrinsic.txt') as f:
+        lines = f.readlines()
+    return np.array(
+        [l.strip().split(' ') for l in lines],
+        dtype=np.float32
+    )
+    # # For Fountain dataset
+    # # K = np.float32([[2759.48, 0, 1520.69],
+    # #                 [0, 12764.16, 1006.81],
+    # #                 [0, 0, 1]])
 
-    # For Fountain dataset
-    # K = np.float32([[2759.48, 0, 1520.69],
-    #                 [0, 12764.16, 1006.81],
-    #                 [0, 0, 1]])
-
-    #For Palace dataset
-    K = np.float32([[2780.1700000000000728, 0, 1539.25],
-                    [0, 2773.5399999999999636, 1001.2699999999999818],
-                    [0, 0, 1]])
+    # #For Palace dataset
+    # # K = np.float32([[2780.1700000000000728, 0, 1539.25],
+    # #                 [0, 2773.5399999999999636, 1001.2699999999999818],
+    # #                 [0, 0, 1]])
     
-    # K = np.float32([[1000, 0, px],
-    #                 [0, 1000, py],
+    # #For Rubics and Rubics_Vertices
+    # K = np.float32([[2666.6667, 0, 960],
+    #                 [0, 2250.0000, 540],
     #                 [0, 0, 1]])
-    return K
+    #return K
 
 def FindEssentialMat(kp1, kp2, matches, K):
     imgpts1 = []
@@ -167,7 +171,7 @@ def LinearLSTriangulation(u, P, u1, P1):
 
 def TraingulatePoints(pt_set1, pt_set2, matches, K, P, P1, img1, ply, _current = None):
     Kinv = np.linalg.inv(K)
-    #reproj_error = []
+    reproj_error = []
     for i in range(0, len(matches)):
         kp = pt_set1[matches[i].queryIdx].pt
         u = np.float32([[[kp[0]], [kp[1]], [1]]])
@@ -182,10 +186,16 @@ def TraingulatePoints(pt_set1, pt_set2, matches, K, P, P1, img1, ply, _current =
         #Triangulate
         X = LinearLSTriangulation(u, P, u1, P1)
 
-        # #Calculate reprojection error
-        # xPt_img = np.matmul(np.matmul(K, P1), X)
-        # xPt_img_ = np.float32([[xPt_img[0]/xPt_img[2], xPt_img[1]/xPt_img[2]]])
-        # reproj_error.append(np.linalg.norm(xPt_img_-kp1))
+        #Calculate reprojection error
+        X1 = [[X[0][0]],
+              [X[1][0]],
+              [X[2][0]],
+              [1]]
+        xPt_img = np.matmul(np.matmul(K, P1), X1)
+        
+        xPt_img_ = np.float32([[xPt_img[0]/xPt_img[2], xPt_img[1]/xPt_img[2]]])
+        reproj_error.append(np.linalg.norm(xPt_img_-kp1))
+        reproj_error.append(1.0)
         
         #print(kp[0], kp[1])
         bgr = img1[int(kp[1]),int(kp[0])]
@@ -195,8 +205,8 @@ def TraingulatePoints(pt_set1, pt_set2, matches, K, P, P1, img1, ply, _current =
 
         #x = X[0] y = Y[1] z = X[2]
         ply.append([X[0],X[1],X[2],bgr[0],bgr[1],bgr[2]])
-    #me = np.mean(reproj_error)
-    return ply
+    me = np.mean(reproj_error)
+    return me, ply
 
 def find_second_camera_matrix(p1, new_kp, old_kp, matches, current, prev, K):
     found_points2D = []
@@ -217,7 +227,7 @@ def find_second_camera_matrix(p1, new_kp, old_kp, matches, current, prev, K):
 
             found_points3D.append(new_point)
             found_points2D.append(new_point2)
-            current.add_entry(new_point, new_point2)
+            #current.add_entry(new_point, new_point2)
 
     print('Matches found in table: ' + str(len(found_points2D)))
 
@@ -257,11 +267,11 @@ def find_second_camera_matrix(p1, new_kp, old_kp, matches, current, prev, K):
     return camera
 
 def PairStructureFromMotion():
-    img1 = cv2.imread("../Resources/Palace/rdimage.000.ppm")
-    img2 = cv2.imread("../Resources/Palace/rdimage.001.ppm")
+    img1 = cv2.imread("../Resources/Fountain/im7.jpg")
+    img2 = cv2.imread("../Resources/Fountain/im8.jpg")
     #kp1, kp2, matches = PointMatchingSURF(img1, img2)
-    kp1, kp2, matches = PointMatchingOpticalFlow(img1, img2, True)
-    K = findCalibrationMat(img1)
+    kp1, kp2, matches = PointMatchingOpticalFlow(img1, img2)
+    K = findCalibrationMat()
     E = FindEssentialMat(kp1, kp2, matches, K)
 
     P0 = np.float32([[1,0,0,0],
@@ -272,10 +282,10 @@ def PairStructureFromMotion():
     print(P1)
 
     ply = []
-    ply = TraingulatePoints(kp1, kp2, matches, K, P0, P1, img1, ply)
-    #print("Mean Error = ", error)
+    error, ply = TraingulatePoints(kp1, kp2, matches, K, P0, P1, img1, ply)
+    print("Mean Error = ", error)
 
-    out = PLY("Output/")
+    out = PLY("Pair_Output/")
     out.insert_header(len(ply), "Palace")
     for i in range(0,len(ply)):
         out.insert_point(ply[i][0],ply[i][1],ply[i][2],ply[i][3],ply[i][4],ply[i][5])
@@ -312,17 +322,17 @@ def MultiViewStructureFromMotion():
     p1 = np.zeros([3, 4], dtype=np.float32)
     p2 = np.zeros([3, 4], dtype=np.float32)
 
-    prev_number_of_points_added = 0
     initial_3d_model = True
 
     factor = 1
     count = 0
 
+    K = findCalibrationMat()
+
     while file_number < number_of_images - 1:
         print('Using ' + str(image_name1) + ' and ' + str(image_name2))
         print('Matching...')
-        kp1, kp2, matches = PointMatchingOpticalFlow(frame1, frame2)
-        K = findCalibrationMat(frame1)
+        kp1, kp2, matches = PointMatchingOpticalFlow(frame1, frame2, True, "im" + str(picture_number1), "im" + str(picture_number2))
 
         if len(matches) >= 8:
             if initial_3d_model:
@@ -333,7 +343,8 @@ def MultiViewStructureFromMotion():
                 p2 = FindPMat(E)
 
                 print('Creating initial 3D model...')
-                point_cloud = TraingulatePoints(kp1, kp2, matches, K, p1, p2, frame1, point_cloud, current)
+                error, point_cloud = TraingulatePoints(kp1, kp2, matches, K, p1, p2, frame1, point_cloud, current)
+                print("Mean Error = ", error)
                 print('Initial lookup table size is: ' + str(current.table_size()))
                 initial_3d_model = False
             else:
@@ -346,19 +357,20 @@ def MultiViewStructureFromMotion():
 
                 p1 = p2.copy()
                 p2 = find_second_camera_matrix(p2, kp2, kp1, matches, current, prev, K)
-                print('New table size after adding known 3D points: ' + str(current.table_size()))
+                
+                #print('New table size after adding known 3D points: ' + str(current.table_size()))
                 print('Triangulating...')
-                point_cloud = TraingulatePoints(kp1, kp2, matches, K, p1, p2, frame1, point_cloud, current)
+                error, point_cloud = TraingulatePoints(kp1, kp2, matches, K, p1, p2, frame1, point_cloud, current)
+                print("Mean Error = ", error)
 
-
-            number_of_points_added = len(kp1)
             print('Start writing points to file...')
             out.insert_header(len(point_cloud), str(file_number))
             for i in range(len(point_cloud)):
                 out.insert_point(point_cloud[i][0], point_cloud[i][1], point_cloud[i][2],
-                                point_cloud[i][3], point_cloud[i][4], point_cloud[i][5])
+                                 point_cloud[i][3], point_cloud[i][4], point_cloud[i][5])
+            point_cloud = []
             file_number += 1
-            prev_number_of_points_added = number_of_points_added + prev_number_of_points_added
+
         else:
             print("Not enough matches...")
 
@@ -369,6 +381,7 @@ def MultiViewStructureFromMotion():
         if count % number_of_images == number_of_images - 1:
             picture_number2 += 1
             factor += 1
+
         image_name1 = input_dir + 'im' + str(picture_number1) + format_img
         image_name2 = input_dir + 'im' + str(picture_number2) + format_img
         frame1 = cv2.imread(image_name1)
