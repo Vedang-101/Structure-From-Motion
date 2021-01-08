@@ -267,8 +267,8 @@ def find_second_camera_matrix(p1, new_kp, old_kp, matches, current, prev, K):
     return camera
 
 def PairStructureFromMotion():
-    img1 = cv2.imread("../Resources/Fountain/im7.jpg")
-    img2 = cv2.imread("../Resources/Fountain/im8.jpg")
+    img1 = cv2.imread("../Resources/Fountain/im1.jpg")
+    img2 = cv2.imread("../Resources/Fountain/im2.jpg")
     #kp1, kp2, matches = PointMatchingSURF(img1, img2)
     kp1, kp2, matches = PointMatchingOpticalFlow(img1, img2)
     K = findCalibrationMat()
@@ -285,10 +285,10 @@ def PairStructureFromMotion():
     error, ply = TraingulatePoints(kp1, kp2, matches, K, P0, P1, img1, ply)
     print("Mean Error = ", error)
 
-    out = PLY("Pair_Output/")
-    out.insert_header(len(ply), "Palace")
-    for i in range(0,len(ply)):
-        out.insert_point(ply[i][0],ply[i][1],ply[i][2],ply[i][3],ply[i][4],ply[i][5])
+    # out = PLY("Pair_Output/")
+    # out.insert_header(len(ply), "Palace")
+    # for i in range(0,len(ply)):
+    #     out.insert_point(ply[i][0],ply[i][1],ply[i][2],ply[i][3],ply[i][4],ply[i][5])
 
     
     cv2.destroyAllWindows()

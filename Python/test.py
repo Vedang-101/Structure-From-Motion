@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import math
+import sys
 from PLY import PLY
 
 def detect_and_match_feature(img1, img2):
@@ -94,7 +95,7 @@ def LinearLSTriangulation(u, P, u1, P1):
 
 def TraingulatePoints(pt_set1, pt_set2, matches, K, P, P1, img1, ply, _current = None):
     Kinv = np.linalg.inv(K)
-    #reproj_error = []
+    reproj_error = []
     for i in range(0, len(matches)):
         kp = pt_set1[matches[i].queryIdx].pt
         u = np.float32([[[kp[0]], [kp[1]], [1]]])
@@ -109,10 +110,14 @@ def TraingulatePoints(pt_set1, pt_set2, matches, K, P, P1, img1, ply, _current =
         #Triangulate
         X = LinearLSTriangulation(u, P, u1, P1)
 
-        # #Calculate reprojection error
-        # xPt_img = np.matmul(np.matmul(K, P1), X)
-        # xPt_img_ = np.float32([[xPt_img[0]/xPt_img[2], xPt_img[1]/xPt_img[2]]])
-        # reproj_error.append(np.linalg.norm(xPt_img_-kp1))
+        #Calculate reprojection error
+        X1 = [[X[0][0]],
+             [X[1][0]],
+             [X[2][0]],
+             [1]]
+        xPt_img = np.matmul(np.matmul(K, P1), X1)
+        xPt_img_ = np.float32([[xPt_img[0]/xPt_img[2], xPt_img[1]/xPt_img[2]]])
+        reproj_error.append(np.linalg.norm(xPt_img_-kp1))
         
         #print(kp[0], kp[1])
         bgr = img1[int(kp[1]),int(kp[0])]
@@ -122,8 +127,45 @@ def TraingulatePoints(pt_set1, pt_set2, matches, K, P, P1, img1, ply, _current =
 
         #x = X[0] y = Y[1] z = X[2]
         ply.append([X[0],X[1],X[2],bgr[0],bgr[1],bgr[2]])
-    #me = np.mean(reproj_error)
-    return ply
+    me = np.mean(reproj_error)
+    return me, ply
+
+def triangulate(p1, p2, Rt1, Rt2, mask, K):
+    """
+    p1,p2: Points in the two images which correspond to each other
+    R, trans: Rotation and translation matrix.
+    mask: is obtained during computation of Essential matrix
+
+    Outputs:
+    point_3d: should be of shape (NumPoints, 3). The last dimension
+    refers to (x,y,z) co-ordinates
+
+    Hint: triangulatePoints
+    """
+    #Creating 3x4 matrices for the two cameras by aligning world coordinates with first camera and stacking the R, T vectors for the second camera
+    
+    #Creating Projection Matrices by multiplying with intrinsic matrix
+    M1 = np.dot(K, Rt1)
+    M2 = np.dot(K, Rt2)
+
+    print("\nProjection Matrix:\n")
+    print(M2)
+
+    #Applying mask to the points to filter the outlier points and get inlier points
+    p1_masked = p1[mask.ravel() == 1]
+    p2_masked = p2[mask.ravel() == 1]
+
+    #Converting image coordinates to normalized coordinates
+    p1_norm = cv2.undistortPoints(p1_masked.reshape(-1, 1, 2), K, None)
+    p2_norm = cv2.undistortPoints(p2_masked.reshape(-1, 1, 2), K, None)
+
+    #Triangulating points
+    point_4d = cv2.triangulatePoints(M1, M2, np.squeeze(p1_norm).T, np.squeeze(p2_norm).T)
+
+    #Converting homogeneous coordinates to regular coordinates
+    point_3d = (point_4d / np.tile(point_4d[-1,:], (4, 1)))[:3,:].T
+    
+    return point_3d
 
 def findCalibrationMat(img):
     px = img.shape[1] / 2
@@ -145,8 +187,8 @@ def findCalibrationMat(img):
     return K
 
 def PairStructureFromMotion():
-    img1 = cv2.imread("../Resources/Fountain/im0.jpg")
-    img2 = cv2.imread("../Resources/Fountain/im1.jpg")
+    img1 = cv2.imread("../Resources/Fountain/im1.jpg")
+    img2 = cv2.imread("../Resources/Fountain/im2.jpg")
     
     p1, p2, matches_good, kp1, kp2 = detect_and_match_feature(img1, img2)
     K = findCalibrationMat(img1)
@@ -158,14 +200,14 @@ def PairStructureFromMotion():
                      [0,0,1,0]])
 
     P1 = compute_pose(p1, p2, E)
-    print(P1)
 
-    ply = []
-    ply = TraingulatePoints(kp1, kp2, matches_good, K, P0, P1, img1, ply)
+
+    ply = triangulate(p1,p2,P0,P1,mask,K)
+    #me, ply = TraingulatePoints(kp1, kp2, matches_good, K, P0, P1, img1, ply)
 
     out = PLY("Output/")
     out.insert_header(len(ply), "Fountain")
     for i in range(0,len(ply)):
-        out.insert_point(ply[i][0],ply[i][1],ply[i][2],ply[i][3],ply[i][4],ply[i][5])
+        out.insert_point([ply[i][0]],[ply[i][1]],[ply[i][2]],255,255,255)
 
 PairStructureFromMotion()
